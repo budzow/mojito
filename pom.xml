@@ -37,6 +37,7 @@
         <docker.compose.remove.volumes>true</docker.compose.remove.volumes>
         <aspectj.version>1.9.21</aspectj.version>
         <jackson.version>2.13.5</jackson.version>
+        <sonar.organization>budzow-github</sonar.organization>
     </properties>
 
     <dependencies>
