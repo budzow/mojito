@@ -1,0 +1,69 @@
+
+name: SonarQube
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '0 */12 * * *'    
+jobs:
+  build:
+    name: Build and analyze
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+#        os: [macos-latest, ubuntu-latest]
+#        os: [macos-latest]
+        os: [ubuntu-latest]
+        java-version:
+#          - 17        
+#          - 21.0.4
+#          - 21.0.7          
+          - 21
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: 'temurin'
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Build and analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          RAND_MEM=$(( ( RANDOM % (6144 - 512 + 1 ) ) + 512 ))
+          export SONAR_SCANNER_JAVA_OPTS="-Xmx${RAND_MEM}m"
+
+          # Calculate day of year (1-366)
+          DAY_OF_YEAR=$(date +%j | sed 's/^0*//')
+          echo "Day of year: $DAY_OF_YEAR"
+          echo "Random Xmx: $RAND_MEM"
+          
+          mvn install
+          mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.projectKey=budzow_maven2 \
+            -Dsonar.organization=budzow-github \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.branch.name=java_512m-6144m-random_ubuntu \
+            -Dsonar.projectVersion=$DAY_OF_YEAR \
+            -Dsonar.buildString=$RAND_MEM \
+            -Dsonar.analysis.memory=$RAND_MEM
+          
+          # USE api/project_analyses/create_event to create event OTHER with the number of allocated memory
+          curl -s "https://sonarcloud.io/api/issues/search?branch=java_512m-6144m-random_ubuntu&s=FILE_LINE&sinceLeakPeriod=true&ps=500&componentKeys=budzow_maven2&organization=budzow-github"
